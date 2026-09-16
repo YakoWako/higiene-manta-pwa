@@ -1,4 +1,4 @@
-# Higiene Manta - PWA de Gestión Territorial (prototipo v0.3)
+# Higiene Manta - PWA de Gestión Territorial (prototipo v0.3.1)
 
 ## Qué incluye esta versión
 
@@ -85,3 +85,10 @@ El formulario Google existente puede seguir funcionando durante el piloto. La PW
 - Decidir si los puntos inactivos/eliminados deben seguir visibles para consulta histórica.
 - Resolver la coordenada pendiente del punto **SM1**.
 - Realizar piloto en Android y iPhone antes de uso institucional general.
+
+
+## Corrección v0.3.1
+- Se corrigió la validación del PIN del piloto (1212).
+- Se agregó indicador visible de versión.
+- Se forzó renovación de caché para evitar mezclar archivos de versiones anteriores.
+- Los archivos propios usan red primero y caché como respaldo offline.

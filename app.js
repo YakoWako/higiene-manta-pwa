@@ -121,9 +121,16 @@ async function confirmSupervisorAccess() {
     return;
   }
   try {
-    const hash = await sha256Hex(pin);
-    const expected = String(window.APP_CONFIG?.supervisorPinHash || '').toLowerCase();
-    if (!expected || hash !== expected) {
+    const configuredPin = String(window.APP_CONFIG?.supervisorPin || '').trim();
+    let valid = false;
+    if (configuredPin) {
+      valid = pin === configuredPin;
+    } else {
+      const hash = await sha256Hex(pin);
+      const expected = String(window.APP_CONFIG?.supervisorPinHash || '').toLowerCase();
+      valid = Boolean(expected) && hash === expected;
+    }
+    if (!valid) {
       err.textContent = 'PIN incorrecto.';
       err.classList.remove('hidden');
       $('supervisorPin').select();
@@ -138,6 +145,7 @@ async function confirmSupervisorAccess() {
     $('supervisorPin').value = ''; err.classList.add('hidden');
     state.auth.pendingAction = null;
     updateAccessUI();
+  if ($('appVersion')) $('appVersion').textContent = `v${window.APP_CONFIG?.version || '0.3.1'}`;
     await refreshPendingList().catch(()=>{});
     toast('Acceso de supervisor habilitado');
     action?.();

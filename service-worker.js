@@ -1,6 +1,6 @@
-const CACHE='higiene-manta-v03-20260915';
+const CACHE='higiene-manta-v031-20260915';
 const ASSETS=[
-  './','./index.html','./app.css','./app.js','./config.js','./manifest.webmanifest',
+  './','./index.html','./app.css?v=031','./app.js?v=031','./config.js?v=031','./manifest.webmanifest',
   './icons/icon-192.png','./icons/icon-512.png',
   './data/barrios.geojson','./data/parroquias.geojson','./data/puntos.json'
 ];
@@ -31,12 +31,12 @@ self.addEventListener('fetch',event=>{
     return;
   }
 
-  // Archivos propios: cache-first para que capas y lógica funcionen sin conexión.
+  // Archivos propios: red primero para recibir actualizaciones; caché como respaldo offline.
   if(url.origin===self.location.origin){
     event.respondWith(
-      caches.match(event.request).then(cached=>cached||fetch(event.request).then(response=>{
+      fetch(event.request).then(response=>{
         const copy=response.clone();caches.open(CACHE).then(c=>c.put(event.request,copy));return response;
-      }))
+      }).catch(()=>caches.match(event.request))
     );
     return;
   }
