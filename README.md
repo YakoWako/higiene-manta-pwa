@@ -1,4 +1,4 @@
-# Higiene Manta - PWA de Gestión Territorial (prototipo v0.2)
+# Higiene Manta - PWA de Gestión Territorial (prototipo v0.3)
 
 ## Qué incluye esta versión
 
@@ -7,10 +7,15 @@
 - Acceso de supervisor mediante PIN para las pestañas Registrar y Pendientes, con cierre de sesión manual y vencimiento automático de la autorización.
 - Diseño móvil vertical, responsive también en escritorio.
 - Capas locales de **231 barrios**, parroquias y **108 registros de puntos críticos** obtenidos de los archivos entregados.
-- Consulta GPS: identifica barrio, parroquia, precisión y distancia aproximada al límite barrial.
+- Consulta GPS mejorada: recoge varias lecturas durante unos segundos y utiliza la más precisa disponible.
+- Muestra las coordenadas exactas que se están usando para poder contrastarlas con Google Earth.
+- Si la lectura cae apenas fuera de un polígono pero el margen de error GPS alcanza un barrio, lo presenta como **barrio probable** en lugar de descartarlo automáticamente.
 - Alerta cuando la precisión GPS y la cercanía al límite hacen ambigua la ubicación.
 - Cálculo del punto crítico más cercano y distancia.
-- Mapa vectorial propio, almacenado localmente: no depende de un mapa base de Internet para mostrar polígonos y puntos.
+- Mapa principal con **Leaflet + OpenStreetMap** cuando existe Internet: calles, avenidas, costa y referencias urbanas.
+- Navegación táctil natural en el mapa: arrastre, zoom con dos dedos, doble toque y controles +/−.
+- Respaldo territorial offline: si el mapa vial o Leaflet no están disponibles, la PWA conserva barrios, parroquias, puntos y GPS mediante el mapa vectorial simplificado local.
+- Semaforización de puntos compatible con la matriz institucional: **rojo = Activo, amarillo = Desplazado/inactivo, verde = Eliminado**.
 - Filtro de puntos por estado: Activo / Desplazado-inactivo / Eliminado / Todos.
 - Formulario de evacuación optimizado para evitar volver a escribir parroquia, barrio, referencia, coordenadas y tipo de propiedad.
 - Registro de fecha/hora de inicio y fin con botones.
@@ -55,7 +60,7 @@ Para probar el GPS real en un celular se recomienda publicar temporalmente el pr
 
 Después de la primera carga/instalación, el Service Worker guarda la interfaz y las capas territoriales. El GPS del dispositivo puede obtener coordenadas sin Internet. Los registros y fotografías se guardan en IndexedDB y quedan pendientes de sincronización.
 
-No se precargan mapas callejeros de terceros. Esto evita depender de licencias, cuotas o políticas de descarga masiva de teselas. La capa vectorial institucional sigue visible offline.
+No se precargan de forma masiva las teselas de OpenStreetMap. Con conexión se presenta el mapa vial completo; sin conexión, la aplicación conserva las capas institucionales y dispone de un mapa vectorial simplificado como respaldo. Esta decisión evita convertir la PWA en un sistema de descarga masiva de mapas de terceros.
 
 ## Conexión con Google
 

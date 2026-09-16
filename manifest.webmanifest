@@ -1,7 +1,7 @@
 {
   "name": "Higiene Manta - Gestión Territorial",
   "short_name": "Higiene Manta",
-  "description": "Consulta territorial pública y registro protegido offline de evacuación de puntos críticos.",
+  "description": "Consulta territorial pública con GPS, mapa vial y registro protegido offline de evacuación de puntos críticos.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

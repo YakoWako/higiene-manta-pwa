@@ -6,12 +6,13 @@ const state = {
   parroquias: null,
   puntos: [],
   currentLocation: null,
+  currentTerritory: null,
   nearestPoint: null,
   selectedMapPoint: null,
   startAt: null,
   endAt: null,
   auth: { authorized: false, expiresAt: 0, pendingAction: null },
-  map: { initial: null, view: null, dragging: false, lastX: 0, lastY: 0, moved: false }
+  map: { leaflet: null, baseLayer: null, barrioLayer: null, parishLayer: null, pointLayer: null, userLayer: null, pointMarkers: new Map(), initial: null, view: null, dragging: false, lastX: 0, lastY: 0, moved: false }
 };
 
 const WASTE_TYPES = [
@@ -31,6 +32,8 @@ const STORE = 'evacuaciones';
 const AUTH_KEY = 'higiene-manta-supervisor-session-v1';
 let dbPromise = null;
 let toastTimer = null;
+let gpsWatchId = null;
+let gpsTimer = null;
 
 function toast(message) {
   const el = $('toast');
@@ -169,7 +172,8 @@ async function loadData() {
   populatePointSelect();
   buildWasteGrid();
   renderStats();
-  renderMap();
+  // El mapa se inicializa al abrir su pestaña; así Leaflet obtiene el tamaño real de la pantalla.
+  if($('tabMapa')?.classList.contains('active')) renderMap();
 }
 
 function cacheFeatureBBoxes(fc) {
@@ -302,27 +306,49 @@ async function locateUser() {
     showBoundaryError('Este navegador no ofrece geolocalización.');
     return;
   }
+  if (gpsWatchId !== null) navigator.geolocation.clearWatch(gpsWatchId);
+  if (gpsTimer) clearTimeout(gpsTimer);
+
   $('locateBtn').disabled=true;
-  $('locateBtn').textContent='Consultando GPS…';
-  navigator.geolocation.getCurrentPosition(
-    pos => {
-      $('locateBtn').disabled=false;
-      $('locateBtn').textContent='⌖ Actualizar mi ubicación GPS';
-      const loc={lat:pos.coords.latitude,lng:pos.coords.longitude,accuracy:pos.coords.accuracy,timestamp:pos.timestamp};
-      state.currentLocation=loc;
-      analyzeLocation(loc);
-      drawUserLocation();
-      updateFormAutoFields();
-      toast('Ubicación actualizada');
+  $('locateBtn').textContent='Buscando una lectura GPS precisa…';
+  let best=null, samples=0, finished=false;
+
+  const finish=(errorMessage='')=>{
+    if(finished)return;
+    finished=true;
+    if(gpsWatchId!==null){navigator.geolocation.clearWatch(gpsWatchId);gpsWatchId=null;}
+    if(gpsTimer){clearTimeout(gpsTimer);gpsTimer=null;}
+    $('locateBtn').disabled=false;
+    $('locateBtn').textContent='⌖ Actualizar mi ubicación GPS';
+    if(!best){
+      showBoundaryError(errorMessage||'No fue posible obtener una posición GPS utilizable. Intente nuevamente en un espacio abierto.');
+      return;
+    }
+    const loc={lat:best.coords.latitude,lng:best.coords.longitude,accuracy:best.coords.accuracy,timestamp:best.timestamp,samples};
+    state.currentLocation=loc;
+    analyzeLocation(loc);
+    drawUserLocation();
+    updateFormAutoFields();
+    toast(`Ubicación actualizada · precisión ±${Math.round(loc.accuracy||0)} m`);
+  };
+
+  gpsWatchId=navigator.geolocation.watchPosition(
+    pos=>{
+      samples++;
+      if(!best || Number(pos.coords.accuracy||Infinity)<Number(best.coords.accuracy||Infinity)) best=pos;
+      const acc=Math.round(best.coords.accuracy||0);
+      $('locateBtn').textContent=`GPS ±${acc} m · buscando mejor lectura…`;
+      // Con una lectura de 8 m o mejor ya es razonable detener la búsqueda.
+      if(samples>=2 && acc<=8) finish();
     },
-    err => {
-      $('locateBtn').disabled=false;
-      $('locateBtn').textContent='⌖ Usar mi ubicación GPS';
-      const msg = err.code===1 ? 'Permiso de ubicación denegado. Active la ubicación para este sitio.' : 'No fue posible obtener la posición GPS. Intente nuevamente en un espacio abierto.';
-      showBoundaryError(msg);
+    err=>{
+      if(err.code===1) finish('Permiso de ubicación denegado. Active la ubicación para este sitio.');
+      else if(!best && err.code===2) $('locateBtn').textContent='GPS temporalmente no disponible…';
     },
-    {enableHighAccuracy:true,timeout:15000,maximumAge:5000}
+    {enableHighAccuracy:true,timeout:12000,maximumAge:0}
   );
+  // Si no alcanza una precisión excelente, se utiliza la mejor lectura recogida durante 10 segundos.
+  gpsTimer=setTimeout(()=>finish(),10000);
 }
 
 function showBoundaryError(msg){
@@ -330,29 +356,50 @@ function showBoundaryError(msg){
 }
 
 function analyzeLocation(loc) {
-  const barrio=containingFeature(state.barrios,loc);
-  const parroquia=containingFeature(state.parroquias,loc);
+  const exactBarrio=containingFeature(state.barrios,loc);
+  const exactParroquia=containingFeature(state.parroquias,loc);
+  const gpsAccuracy=Math.max(0,Number(loc.accuracy||0));
+  const probableThreshold=Math.max(12,gpsAccuracy*1.35);
+
+  let barrio=exactBarrio, barrioProbable=false, barrioDistance=Infinity;
+  if(!barrio){
+    const near=nearestOtherFeature(state.barrios,loc,null);
+    if(near.feature && near.distance<=probableThreshold){barrio=near.feature;barrioProbable=true;barrioDistance=near.distance;}
+  }else barrioDistance=featureBoundaryDistance(barrio,loc);
+
+  let parroquia=exactParroquia, parroquiaProbable=false;
+  if(!parroquia){
+    const near=nearestOtherFeature(state.parroquias,loc,null);
+    if(near.feature && near.distance<=probableThreshold){parroquia=near.feature;parroquiaProbable=true;}
+  }
+
+  state.currentTerritory={barrio,parroquia,barrioProbable,parroquiaProbable};
   $('locHeadline').textContent='Ubicación territorial identificada';
-  $('barrioValue').textContent=barrio?pointName(barrio):'Fuera de polígono';
-  $('parroquiaValue').textContent=parroquia?pointName(parroquia):'Fuera de polígono';
-  $('precisionValue').textContent=`±${Math.round(loc.accuracy||0)} m`;
-  $('accuracyBadge').textContent=(loc.accuracy<=10?'GPS alta':loc.accuracy<=25?'GPS media':'GPS baja');
+  $('barrioValue').textContent=barrio ? `${pointName(barrio)}${barrioProbable?' (probable)':''}` : 'Fuera de polígonos';
+  $('parroquiaValue').textContent=parroquia ? `${pointName(parroquia)}${parroquiaProbable?' (probable)':''}` : 'Fuera de polígonos';
+  $('precisionValue').textContent=`±${Math.round(gpsAccuracy)} m`;
+  $('coordinatesValue').textContent=`${loc.lat.toFixed(6)}, ${loc.lng.toFixed(6)}`;
+  $('accuracyBadge').textContent=(gpsAccuracy<=10?'GPS alta':gpsAccuracy<=25?'GPS media':'GPS baja');
 
   const alert=$('boundaryAlert');
-  if(barrio){
-    const d=featureBoundaryDistance(barrio,loc);
+  if(exactBarrio){
+    const d=barrioDistance;
     $('limiteValue').textContent=formatMeters(d);
-    const threshold=Math.max(12,(loc.accuracy||0)*1.35);
+    const threshold=Math.max(12,gpsAccuracy*1.35);
     if(d<=threshold){
-      const neighbor=nearestOtherFeature(state.barrios,loc,barrio);
+      const neighbor=nearestOtherFeature(state.barrios,loc,exactBarrio);
       const n=neighbor.feature && neighbor.distance<Math.max(40,threshold*2) ? ` con ${pointName(neighbor.feature)}` : '';
       alert.className='alert warning';
-      alert.textContent=`Ubicación cercana a un límite barrial${n}. Precisión GPS ±${Math.round(loc.accuracy||0)} m; confirme visualmente si la intervención está exactamente sobre el lindero.`;
+      alert.textContent=`Ubicación cercana a un límite barrial${n}. Precisión GPS ±${Math.round(gpsAccuracy)} m; confirme visualmente si la intervención está exactamente sobre el lindero.`;
     }else alert.classList.add('hidden');
+  }else if(barrioProbable){
+    $('limiteValue').textContent=formatMeters(barrioDistance);
+    alert.className='alert warning';
+    alert.textContent=`La coordenada puntual quedó fuera del polígono, pero está a ${formatMeters(barrioDistance)} de ${pointName(barrio)} y el GPS reporta una precisión de ±${Math.round(gpsAccuracy)} m. Se muestra como barrio probable; actualice el GPS al aire libre para confirmar.`;
   }else{
     $('limiteValue').textContent='—';
     alert.className='alert warning';
-    alert.textContent='La coordenada no cayó dentro de un polígono barrial del archivo cargado. Revise la precisión GPS o la cobertura de la capa.';
+    alert.textContent=`La mejor coordenada disponible no coincide con un polígono barrial y tampoco queda dentro del margen de error GPS (±${Math.round(gpsAccuracy)} m). Pruebe nuevamente al aire libre o revise la cobertura cartográfica.`;
   }
 
   const near=nearestCritical(loc); state.nearestPoint=near.point;
@@ -380,8 +427,8 @@ function selectedPoint(){ return state.puntos.find(p=>p.codigo===$('formPoint').
 function updateFormAutoFields(){
   const p=selectedPoint();
   const loc=state.currentLocation;
-  let barrioGPS=null,parroquiaGPS=null;
-  if(loc){barrioGPS=containingFeature(state.barrios,loc);parroquiaGPS=containingFeature(state.parroquias,loc);}
+  const territorio=state.currentTerritory;
+  const barrioGPS=territorio?.barrio||null, parroquiaGPS=territorio?.parroquia||null;
   $('formParroquia').value=loc&&parroquiaGPS?pointName(parroquiaGPS):(p?.parroquia||'');
   $('formBarrio').value=loc&&barrioGPS?pointName(barrioGPS):(p?.barrio||'');
   $('formReferencia').value=p?.referencia||'';
@@ -435,6 +482,18 @@ function switchTab(name, authorizedBypass=false){
   return true;
 }
 
+function pointStatusClass(estado=''){
+  if(estado==='Activo')return 'active';
+  if(estado==='Eliminado')return 'eliminated';
+  return 'inactive';
+}
+
+function pointStatusColor(estado=''){
+  if(estado==='Activo')return '#d83434';      // rojo
+  if(estado==='Eliminado')return '#2f9e57';  // verde
+  return '#f2c94c';                           // amarillo
+}
+
 function geometryPath(geometry){
   const ringPath = ring => ring.length ? `M ${ring.map(c=>`${c[0]} ${-c[1]}`).join(' L ')} Z` : '';
   if(geometry.type==='Polygon') return geometry.coordinates.map(ringPath).join(' ');
@@ -448,62 +507,157 @@ function datasetBounds(){
   return {x:minX,y:-maxY,width:maxX-minX,height:maxY-minY};
 }
 
-function renderMap(){
-  if(!state.parroquias||!state.barrios)return;
-  const svg=$('mapSvg');
+function initLeafletMap(){
+  if(state.map.leaflet || !window.L) return Boolean(state.map.leaflet);
+  const host=$('leafletMap');
+  if(!host)return false;
+  try{
+    const map=L.map(host,{zoomControl:true,touchZoom:true,doubleClickZoom:true,scrollWheelZoom:true,dragging:true,preferCanvas:true,minZoom:10,maxZoom:19});
+    state.map.leaflet=map;
+    state.map.baseLayer=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
+      maxZoom:19,
+      attribution:'&copy; OpenStreetMap contributors',
+      crossOrigin:true
+    }).addTo(map);
+
+    state.map.parishLayer=L.geoJSON(state.parroquias,{
+      style:()=>({color:'#087d79',weight:2,opacity:.9,dashArray:'6 5',fillColor:'#0d7a76',fillOpacity:.025}),
+      onEachFeature:(f,l)=>l.bindTooltip(pointName(f),{sticky:true,direction:'top'})
+    }).addTo(map);
+    state.map.barrioLayer=L.geoJSON(state.barrios,{
+      style:()=>({color:'#557b8d',weight:1.35,opacity:.9,fillColor:'#ffffff',fillOpacity:.07}),
+      onEachFeature:(f,l)=>l.bindTooltip(pointName(f),{sticky:true,direction:'top'})
+    }).addTo(map);
+    state.map.pointLayer=L.layerGroup().addTo(map);
+    state.map.userLayer=L.layerGroup().addTo(map);
+    state.map.pointMarkers=new Map();
+
+    const bounds=state.map.barrioLayer.getBounds();
+    if(bounds?.isValid()) map.fitBounds(bounds.pad(.04));
+    else map.setView([-0.96,-80.72],13);
+
+    state.map.baseLayer.on('tileerror',()=>{
+      if(!navigator.onLine) showMapBaseStatus('Sin conexión: el mapa vial no está disponible; las capas institucionales siguen funcionando.');
+    });
+    state.map.baseLayer.on('load',()=>{ if(navigator.onLine) hideMapBaseStatus(); });
+    host.classList.remove('hidden');
+    $('fallbackVectorMap').classList.add('hidden');
+    setTimeout(()=>map.invalidateSize(),30);
+    return true;
+  }catch(e){
+    console.error('Leaflet no pudo iniciarse',e);
+    state.map.leaflet=null;
+    return false;
+  }
+}
+
+function showMapBaseStatus(message){
+  const el=$('mapBaseStatus'); if(!el)return;
+  el.textContent=message; el.classList.remove('hidden');
+}
+function hideMapBaseStatus(){ const el=$('mapBaseStatus'); if(el)el.classList.add('hidden'); }
+
+function renderFallbackMap(){
+  $('leafletMap')?.classList.add('hidden');
+  $('fallbackVectorMap')?.classList.remove('hidden');
   if(!state.map.initial){
     const b=datasetBounds(); const pad=.005;
     state.map.initial={x:b.x-pad,y:b.y-pad,width:b.width+2*pad,height:b.height+2*pad};
     state.map.view={...state.map.initial};
   }
   applyViewBox();
-  const parish=$('parishLayer'), barrios=$('barrioLayer'), points=$('pointLayer');
-  if(!parish.dataset.rendered){
+  const parish=$('parishLayer'), barrios=$('barrioLayer');
+  if(parish && !parish.dataset.rendered){
     parish.innerHTML=state.parroquias.features.map((f,i)=>`<path class="parish-shape" data-i="${i}" d="${geometryPath(f.geometry)}"><title>${escapeHtml(pointName(f))}</title></path>`).join('');
     parish.dataset.rendered='1';
   }
-  if(!barrios.dataset.rendered){
+  if(barrios && !barrios.dataset.rendered){
     barrios.innerHTML=state.barrios.features.map((f,i)=>`<path class="barrio-shape" data-i="${i}" d="${geometryPath(f.geometry)}"><title>${escapeHtml(pointName(f))}</title></path>`).join('');
     barrios.dataset.rendered='1';
   }
-  renderPointLayer();
-  drawUserLocation();
-  setLayerVisibility();
+  renderPointLayer(); drawUserLocation(); setLayerVisibility();
+  showMapBaseStatus('Mapa vial no disponible. Se muestra el mapa territorial simplificado almacenado en el dispositivo.');
+}
+
+function renderMap(){
+  if(!state.parroquias||!state.barrios)return;
+  if(initLeafletMap()){
+    renderPointLayer(); drawUserLocation(); setLayerVisibility();
+    setTimeout(()=>state.map.leaflet.invalidateSize(),40);
+    if(!navigator.onLine) showMapBaseStatus('Sin conexión: barrios, parroquias, puntos y GPS siguen disponibles; el fondo vial puede no mostrarse.');
+  }else renderFallbackMap();
 }
 
 function renderPointLayer(){
-  const layer=$('pointLayer'); if(!layer)return;
-  const filter=$('estadoFilter')?.value||'Activo';
+  const filter=$('estadoFilter')?.value||'Todos';
   const pts=state.puntos.filter(p=>Number.isFinite(p.lat)&&Number.isFinite(p.lng)&&(filter==='Todos'||p.estado===filter));
-  const r=(state.map.view?.width||.25)/520;
+
+  if(state.map.leaflet && window.L){
+    state.map.pointLayer.clearLayers();
+    state.map.pointMarkers=new Map();
+    for(const p of pts){
+      const marker=L.circleMarker([p.lat,p.lng],{
+        radius:8,
+        color:'#ffffff',weight:2.5,opacity:1,
+        fillColor:pointStatusColor(p.estado),fillOpacity:1
+      });
+      marker.bindTooltip(`${escapeHtml(p.codigo)} · ${escapeHtml(p.barrio)}`,{direction:'top',offset:[0,-6],opacity:.95});
+      marker.on('click',()=>showMapPoint(p.codigo));
+      marker.addTo(state.map.pointLayer);
+      state.map.pointMarkers.set(p.codigo,marker);
+    }
+    return;
+  }
+
+  const layer=$('pointLayer'); if(!layer)return;
+  const r=(state.map.view?.width||.25)/430;
   layer.innerHTML=pts.map(p=>{
-    const cls=p.estado==='Activo'?'active':p.estado==='Eliminado'?'eliminated':'inactive';
+    const cls=pointStatusClass(p.estado);
     return `<circle class="point-dot ${cls}" data-code="${escapeHtml(p.codigo)}" cx="${p.lng}" cy="${-p.lat}" r="${r}"><title>${escapeHtml(p.codigo+' · '+p.barrio)}</title></circle>`;
   }).join('');
   layer.querySelectorAll('.point-dot').forEach(el=>el.addEventListener('click',e=>{e.stopPropagation();showMapPoint(el.dataset.code);}));
 }
 
 function drawUserLocation(){
+  const loc=state.currentLocation;
+  if(state.map.leaflet && window.L){
+    state.map.userLayer.clearLayers();
+    if(!loc)return;
+    L.circle([loc.lat,loc.lng],{radius:Math.max(4,loc.accuracy||10),color:'#124d70',weight:1.5,opacity:.8,fillColor:'#124d70',fillOpacity:.12,interactive:false}).addTo(state.map.userLayer);
+    L.circleMarker([loc.lat,loc.lng],{radius:7,color:'#ffffff',weight:3,fillColor:'#124d70',fillOpacity:1,interactive:false}).addTo(state.map.userLayer);
+    return;
+  }
   const g=$('userLayer'); if(!g)return;
-  const loc=state.currentLocation; if(!loc){g.innerHTML='';return;}
-  const r=(state.map.view?.width||.25)/400;
+  if(!loc){g.innerHTML='';return;}
+  const r=(state.map.view?.width||.25)/350;
   const accuracyDeg=(loc.accuracy||10)/111320;
   g.innerHTML=`<circle class="user-halo" cx="${loc.lng}" cy="${-loc.lat}" r="${Math.max(r*2.2,accuracyDeg)}"></circle><circle class="user-dot" cx="${loc.lng}" cy="${-loc.lat}" r="${r}"></circle>`;
 }
 
 function setLayerVisibility(){
-  $('barrioLayer').style.display=$('toggleBarrios').checked?'':'none';
-  $('parishLayer').style.display=$('toggleParroquias').checked?'':'none';
-  $('pointLayer').style.display=$('togglePuntos').checked?'':'none';
+  const barriosOn=$('toggleBarrios')?.checked, parroquiasOn=$('toggleParroquias')?.checked, puntosOn=$('togglePuntos')?.checked;
+  if(state.map.leaflet){
+    const map=state.map.leaflet;
+    const toggle=(layer,on)=>{if(!layer)return;if(on&&!map.hasLayer(layer))layer.addTo(map);if(!on&&map.hasLayer(layer))map.removeLayer(layer);};
+    toggle(state.map.barrioLayer,barriosOn); toggle(state.map.parishLayer,parroquiasOn); toggle(state.map.pointLayer,puntosOn);
+    return;
+  }
+  if($('barrioLayer')) $('barrioLayer').style.display=barriosOn?'':'none';
+  if($('parishLayer')) $('parishLayer').style.display=parroquiasOn?'':'none';
+  if($('pointLayer')) $('pointLayer').style.display=puntosOn?'':'none';
 }
 
 function applyViewBox(){
-  const v=state.map.view; if(!v)return;
+  const v=state.map.view; if(!v||!$('mapSvg'))return;
   $('mapSvg').setAttribute('viewBox',`${v.x} ${v.y} ${v.width} ${v.height}`);
 }
 
 function zoomMap(factor,center=null){
-  const v=state.map.view;
+  if(state.map.leaflet){
+    if(factor<1)state.map.leaflet.zoomIn();else state.map.leaflet.zoomOut();
+    return;
+  }
+  const v=state.map.view;if(!v)return;
   const cx=center?.lng ?? (v.x+v.width/2), cy=center? -center.lat : (v.y+v.height/2);
   const nw=Math.max(.002,Math.min(state.map.initial.width*1.15,v.width*factor));
   const nh=nw*(v.height/v.width);
@@ -513,7 +667,13 @@ function zoomMap(factor,center=null){
 }
 
 function centerMapOn(loc,width=.02){
-  if(!loc||!state.map.view)return;
+  if(!loc)return;
+  if(state.map.leaflet){
+    const zoom=width<=.013?17:width<=.022?16:15;
+    state.map.leaflet.setView([loc.lat,loc.lng],zoom,{animate:true});
+    return;
+  }
+  if(!state.map.view)return;
   const aspect=state.map.view.height/state.map.view.width;
   state.map.view={x:loc.lng-width/2,y:-loc.lat-(width*aspect)/2,width,height:width*aspect};
   applyViewBox();renderPointLayer();drawUserLocation();
@@ -522,21 +682,26 @@ function centerMapOn(loc,width=.02){
 function showMapPoint(code){
   const p=state.puntos.find(x=>x.codigo===code); if(!p)return;
   state.selectedMapPoint=p;
+  const cls=pointStatusClass(p.estado);
   const card=$('mapSelectionCard');card.classList.remove('hidden');
-  card.innerHTML=`<div class="point-card-head"><div><p class="eyebrow">${escapeHtml(p.codigo)}</p><h3>${escapeHtml(p.barrio)}</h3></div><span class="distance-chip">${escapeHtml(p.estado)}</span></div><div class="point-details"><strong>${escapeHtml(p.referencia||'Sin referencia')}</strong><br>${escapeHtml(p.parroquia)} · Frecuencia: ${escapeHtml(p.frecuencia)} · Propiedad: ${escapeHtml(p.tipo_propiedad)}<br>Residuos registrados: ${escapeHtml(p.residuos)}</div><div class="button-row"><button class="secondary-btn" id="mapCenterSelected">Centrar</button><button class="primary-btn" id="mapRegisterSelected">${supervisorSessionActive()?'Registrar evacuación':'🔒 Registrar evacuación'}</button></div>`;
+  card.innerHTML=`<div class="point-card-head"><div><p class="eyebrow">${escapeHtml(p.codigo)}</p><h3>${escapeHtml(p.barrio)}</h3></div><span class="status-chip ${cls}">${escapeHtml(p.estado)}</span></div><div class="point-details"><strong>${escapeHtml(p.referencia||'Sin referencia')}</strong><br>${escapeHtml(p.parroquia)} · Frecuencia: ${escapeHtml(p.frecuencia)} · Propiedad: ${escapeHtml(p.tipo_propiedad)}<br>Residuos registrados: ${escapeHtml(p.residuos)}</div><div class="button-row"><button class="secondary-btn" id="mapCenterSelected">Centrar</button><button class="primary-btn" id="mapRegisterSelected">${supervisorSessionActive()?'Registrar evacuación':'🔒 Registrar evacuación'}</button></div>`;
   $('mapCenterSelected').onclick=()=>centerMapOn({lat:p.lat,lng:p.lng},.012);
   $('mapRegisterSelected').onclick=()=>setPointForRegistration(p.codigo);
+  if(state.map.leaflet){
+    const marker=state.map.pointMarkers.get(p.codigo);
+    if(marker){state.map.leaflet.panTo(marker.getLatLng(),{animate:true});marker.openTooltip();}
+  }
 }
 
 function setupMapPan(){
-  const svg=$('mapSvg');
+  const svg=$('mapSvg'); if(!svg)return;
   svg.addEventListener('pointerdown',e=>{
     if(e.target.classList.contains('point-dot'))return;
     state.map.dragging=true;state.map.lastX=e.clientX;state.map.lastY=e.clientY;state.map.moved=false;svg.setPointerCapture(e.pointerId);
   });
   svg.addEventListener('pointermove',e=>{
     if(!state.map.dragging)return;
-    const rect=svg.getBoundingClientRect(),v=state.map.view;
+    const rect=svg.getBoundingClientRect(),v=state.map.view;if(!v)return;
     const dx=(e.clientX-state.map.lastX)/rect.width*v.width;
     const dy=(e.clientY-state.map.lastY)/rect.height*v.height;
     if(Math.abs(e.clientX-state.map.lastX)+Math.abs(e.clientY-state.map.lastY)>2)state.map.moved=true;
@@ -704,6 +869,10 @@ function updateNetworkStatus(){
   const online=navigator.onLine, pill=$('networkPill');
   pill.classList.toggle('offline',!online);pill.classList.toggle('online',online);
   pill.querySelector('span:last-child').textContent=online?'En línea':'Sin conexión';
+  if(state.map.leaflet){
+    if(online) hideMapBaseStatus();
+    else showMapBaseStatus('Sin conexión: barrios, parroquias, puntos y GPS siguen disponibles; el fondo vial puede no mostrarse.');
+  }
   refreshPendingList().catch(()=>{});
 }
 

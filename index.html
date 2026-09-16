@@ -10,6 +10,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   <link rel="stylesheet" href="app.css" />
 </head>
 <body>
@@ -89,6 +90,7 @@
               <div class="info-item"><span>Barrio</span><strong id="barrioValue">—</strong></div>
               <div class="info-item"><span>Precisión</span><strong id="precisionValue">—</strong></div>
               <div class="info-item"><span>Límite</span><strong id="limiteValue">—</strong></div>
+              <div class="info-item info-wide"><span>Coordenadas usadas</span><strong id="coordinatesValue">—</strong></div>
             </div>
 
             <div id="boundaryAlert" class="alert warning hidden"></div>
@@ -133,31 +135,41 @@
             <label class="toggle-chip"><input type="checkbox" id="toggleParroquias" checked /> Parroquias</label>
             <label class="toggle-chip"><input type="checkbox" id="togglePuntos" checked /> Puntos</label>
             <select id="estadoFilter" class="compact-select" aria-label="Filtrar estado">
-              <option value="Todos">Todos</option>
-              <option value="Activo" selected>Activos</option>
+              <option value="Todos" selected>Todos</option>
+              <option value="Activo">Activos</option>
               <option value="Desplazado / inactivo">Inactivos</option>
               <option value="Eliminado">Eliminados</option>
             </select>
           </div>
 
-          <div id="vectorMap" class="vector-map" aria-label="Mapa vectorial interactivo">
-            <svg id="mapSvg" role="img" aria-label="Mapa de Manta">
-              <g id="mapViewport">
-                <g id="parishLayer"></g>
-                <g id="barrioLayer"></g>
-                <g id="pointLayer"></g>
-                <g id="userLayer"></g>
-              </g>
-            </svg>
-            <div class="zoom-controls">
-              <button id="zoomInBtn" aria-label="Acercar">+</button>
-              <button id="zoomOutBtn" aria-label="Alejar">−</button>
+          <div class="map-legend" aria-label="Leyenda de estado de puntos críticos">
+            <span><i class="legend-dot active"></i> Activo</span>
+            <span><i class="legend-dot inactive"></i> Inactivo / desplazado</span>
+            <span><i class="legend-dot eliminated"></i> Eliminado</span>
+          </div>
+
+          <div id="vectorMap" class="vector-map" aria-label="Mapa territorial interactivo">
+            <div id="leafletMap" class="leaflet-map" aria-label="Mapa vial de Manta"></div>
+            <div id="fallbackVectorMap" class="fallback-vector-map hidden" aria-label="Mapa territorial offline simplificado">
+              <svg id="mapSvg" role="img" aria-label="Mapa territorial offline de Manta">
+                <g id="mapViewport">
+                  <g id="parishLayer"></g>
+                  <g id="barrioLayer"></g>
+                  <g id="pointLayer"></g>
+                  <g id="userLayer"></g>
+                </g>
+              </svg>
+              <div class="zoom-controls fallback-zoom">
+                <button id="zoomInBtn" aria-label="Acercar">+</button>
+                <button id="zoomOutBtn" aria-label="Alejar">−</button>
+              </div>
+              <div class="map-hint">Modo territorial offline · arrastre y use +/−</div>
             </div>
-            <div id="mapHint" class="map-hint">Arrastre para mover · pellizque o use +/− para zoom</div>
+            <div id="mapBaseStatus" class="map-base-status hidden"></div>
           </div>
 
           <div id="mapSelectionCard" class="map-selection-card hidden"></div>
-          <div class="offline-map-note">Este mapa vectorial se almacena dentro del aplicativo, por lo que los límites y puntos siguen disponibles sin internet.</div>
+          <div class="offline-map-note"><strong>Con internet:</strong> se muestran calles y avenidas con OpenStreetMap. <strong>Sin internet:</strong> barrios, parroquias, puntos críticos y GPS continúan disponibles; el mapa vial puede no mostrarse si no estaba previamente en caché.</div>
         </section>
 
         <section id="tabRegistro" class="tab-panel">
@@ -323,6 +335,7 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="config.js"></script>
   <script src="app.js"></script>
 </body>
