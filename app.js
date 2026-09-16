@@ -121,17 +121,12 @@ async function confirmSupervisorAccess() {
     return;
   }
   try {
-    const configuredPin = String(window.APP_CONFIG?.supervisorPin || '').trim();
-    let valid = false;
-    if (configuredPin) {
-      valid = pin === configuredPin;
-    } else {
-      const hash = await sha256Hex(pin);
-      const expected = String(window.APP_CONFIG?.supervisorPinHash || '').toLowerCase();
-      valid = Boolean(expected) && hash === expected;
-    }
+    // PILOTO v0.3.2: validación directa y deliberadamente simple para eliminar cualquier
+    // dependencia de config.js, crypto o caché durante las pruebas en territorio.
+    const PILOT_PIN = '1212';
+    const valid = pin === PILOT_PIN;
     if (!valid) {
-      err.textContent = 'PIN incorrecto.';
+      err.textContent = 'PIN incorrecto. Código de versión: v0.3.2';
       err.classList.remove('hidden');
       $('supervisorPin').select();
       return;
@@ -145,7 +140,7 @@ async function confirmSupervisorAccess() {
     $('supervisorPin').value = ''; err.classList.add('hidden');
     state.auth.pendingAction = null;
     updateAccessUI();
-  if ($('appVersion')) $('appVersion').textContent = `v${window.APP_CONFIG?.version || '0.3.1'}`;
+  if ($('appVersion')) $('appVersion').textContent = `v0.3.2`;
     await refreshPendingList().catch(()=>{});
     toast('Acceso de supervisor habilitado');
     action?.();

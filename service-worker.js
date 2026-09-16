@@ -1,6 +1,6 @@
-const CACHE='higiene-manta-v031-20260915';
+const CACHE='higiene-manta-v032-20260915';
 const ASSETS=[
-  './','./index.html','./app.css?v=031','./app.js?v=031','./config.js?v=031','./manifest.webmanifest',
+  './','./index.html','./app.css?v=032','./app.js?v=032','./config.js?v=032','./manifest.webmanifest',
   './icons/icon-192.png','./icons/icon-512.png',
   './data/barrios.geojson','./data/parroquias.geojson','./data/puntos.json'
 ];

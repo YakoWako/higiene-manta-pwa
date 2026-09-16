@@ -1,4 +1,4 @@
-# Higiene Manta - PWA de Gestión Territorial (prototipo v0.3.1)
+# Higiene Manta - PWA de Gestión Territorial (prototipo v0.3.2)
 
 ## Qué incluye esta versión
 
@@ -87,8 +87,15 @@ El formulario Google existente puede seguir funcionando durante el piloto. La PW
 - Realizar piloto en Android y iPhone antes de uso institucional general.
 
 
-## Corrección v0.3.1
+## Corrección v0.3.2
 - Se corrigió la validación del PIN del piloto (1212).
 - Se agregó indicador visible de versión.
 - Se forzó renovación de caché para evitar mezclar archivos de versiones anteriores.
 - Los archivos propios usan red primero y caché como respaldo offline.
+
+
+## Corrección v0.3.2
+
+- Para el piloto, el PIN 1212 se valida directamente dentro de app.js, sin depender de config.js ni de Web Crypto.
+- Se cambió nuevamente el identificador de caché y los parámetros de versión a 032.
+- Si un PIN falla, el mensaje muestra explícitamente v0.3.2 para confirmar qué código está ejecutando el teléfono.

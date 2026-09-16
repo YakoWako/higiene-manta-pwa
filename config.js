@@ -11,5 +11,5 @@ window.APP_CONFIG = {
   // Nombre visible del sistema. La identidad gráfica es provisional hasta cargar logo/colores oficiales.
   organization: "Dirección de Higiene y Salubridad",
   appName: "Higiene Manta",
-  version: "0.3.1"
+  version: "0.3.2"
 };
