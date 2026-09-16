@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b3b5a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <title>Higiene Manta - Gestión Territorial</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="app.css" />
+</head>
+<body>
+  <div id="appShell">
+    <header class="app-header">
+      <div class="brand-mark" aria-hidden="true">HM</div>
+      <div class="brand-copy">
+        <div class="brand-overline">GESTIÓN TERRITORIAL</div>
+        <h1>Higiene Manta</h1>
+      </div>
+      <div id="networkPill" class="status-pill online"><span class="status-dot"></span><span>En línea</span></div>
+    </header>
+
+    <main>
+      <section id="homeScreen" class="screen active">
+        <div class="hero-card">
+          <div>
+            <p class="eyebrow">Dirección de Higiene y Salubridad</p>
+            <h2>Sistema móvil de gestión en territorio</h2>
+            <p class="muted">Consulta territorial, ubicación de puntos y registro de intervenciones desde el celular.</p>
+          </div>
+          <div class="hero-badge">PWA · Offline</div>
+        </div>
+
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Módulos</p>
+            <h3>Seleccione un proceso</h3>
+          </div>
+        </div>
+
+        <div id="moduleGrid" class="module-grid">
+          <button class="module-card" data-open-module="puntos">
+            <div class="module-icon">●</div>
+            <div class="module-text">
+              <strong>Evacuación de puntos críticos</strong>
+              <span>Ubicación, mapa, ficha y registro de evacuación</span>
+            </div>
+            <div class="module-arrow">›</div>
+          </button>
+        </div>
+
+        <div class="home-note">
+          <strong>Diseño escalable.</strong> La pantalla inicial está preparada para agregar nuevos módulos sin mostrar botones vacíos o inactivos.
+        </div>
+      </section>
+
+      <section id="moduleScreen" class="screen">
+        <div class="module-topbar">
+          <button id="backHome" class="icon-btn" aria-label="Volver">‹</button>
+          <div>
+            <p class="eyebrow">Módulo</p>
+            <h2>Evacuación de puntos críticos</h2>
+          </div>
+        </div>
+
+        <div id="accessBar" class="access-bar public" aria-live="polite">
+          <div class="access-copy">
+            <span id="accessIcon" class="access-icon">◎</span>
+            <div><strong id="accessTitle">Consulta pública</strong><small id="accessSubtitle">Ubicación, mapa y fichas disponibles sin contraseña</small></div>
+          </div>
+          <button id="logoutSupervisorBtn" class="secondary-btn compact hidden" type="button">Cerrar sesión</button>
+        </div>
+
+        <section id="tabUbicacion" class="tab-panel active">
+          <div class="location-card">
+            <div class="location-card-head">
+              <div>
+                <p class="eyebrow">Posición actual</p>
+                <h3 id="locHeadline">Ubicación aún no consultada</h3>
+              </div>
+              <div id="accuracyBadge" class="accuracy-badge">GPS</div>
+            </div>
+
+            <div class="info-grid">
+              <div class="info-item"><span>Parroquia</span><strong id="parroquiaValue">—</strong></div>
+              <div class="info-item"><span>Barrio</span><strong id="barrioValue">—</strong></div>
+              <div class="info-item"><span>Precisión</span><strong id="precisionValue">—</strong></div>
+              <div class="info-item"><span>Límite</span><strong id="limiteValue">—</strong></div>
+            </div>
+
+            <div id="boundaryAlert" class="alert warning hidden"></div>
+
+            <button id="locateBtn" class="primary-btn full">⌖ Usar mi ubicación GPS</button>
+            <p class="microcopy">El GPS funciona sin internet. La primera autorización de ubicación depende del navegador del teléfono.</p>
+          </div>
+
+          <div class="point-card" id="nearestCard">
+            <div class="point-card-head">
+              <div>
+                <p class="eyebrow">Punto crítico más cercano</p>
+                <h3 id="nearestTitle">—</h3>
+              </div>
+              <span id="nearestDistance" class="distance-chip">—</span>
+            </div>
+            <div id="nearestDetails" class="point-details muted">Use el GPS para calcular el punto más cercano.</div>
+            <div class="button-row">
+              <button id="nearestMapBtn" class="secondary-btn" disabled>Ver en mapa</button>
+              <button id="nearestRegisterBtn" class="primary-btn" disabled>Registrar evacuación</button>
+            </div>
+          </div>
+
+          <div class="stats-row">
+            <div class="stat-card"><span>Total inventario</span><strong id="statTotal">108</strong></div>
+            <div class="stat-card"><span>Activos</span><strong id="statActive">—</strong></div>
+            <div class="stat-card"><span>Con coordenadas</span><strong id="statCoords">—</strong></div>
+          </div>
+        </section>
+
+        <section id="tabMapa" class="tab-panel">
+          <div class="map-toolbar">
+            <div class="map-title">
+              <p class="eyebrow">Mapa territorial</p>
+              <h3>Barrios, parroquias y puntos críticos</h3>
+            </div>
+            <button id="centerMapBtn" class="secondary-btn compact">Centrar GPS</button>
+          </div>
+
+          <div class="map-controls-row">
+            <label class="toggle-chip"><input type="checkbox" id="toggleBarrios" checked /> Barrios</label>
+            <label class="toggle-chip"><input type="checkbox" id="toggleParroquias" checked /> Parroquias</label>
+            <label class="toggle-chip"><input type="checkbox" id="togglePuntos" checked /> Puntos</label>
+            <select id="estadoFilter" class="compact-select" aria-label="Filtrar estado">
+              <option value="Todos">Todos</option>
+              <option value="Activo" selected>Activos</option>
+              <option value="Desplazado / inactivo">Inactivos</option>
+              <option value="Eliminado">Eliminados</option>
+            </select>
+          </div>
+
+          <div id="vectorMap" class="vector-map" aria-label="Mapa vectorial interactivo">
+            <svg id="mapSvg" role="img" aria-label="Mapa de Manta">
+              <g id="mapViewport">
+                <g id="parishLayer"></g>
+                <g id="barrioLayer"></g>
+                <g id="pointLayer"></g>
+                <g id="userLayer"></g>
+              </g>
+            </svg>
+            <div class="zoom-controls">
+              <button id="zoomInBtn" aria-label="Acercar">+</button>
+              <button id="zoomOutBtn" aria-label="Alejar">−</button>
+            </div>
+            <div id="mapHint" class="map-hint">Arrastre para mover · pellizque o use +/− para zoom</div>
+          </div>
+
+          <div id="mapSelectionCard" class="map-selection-card hidden"></div>
+          <div class="offline-map-note">Este mapa vectorial se almacena dentro del aplicativo, por lo que los límites y puntos siguen disponibles sin internet.</div>
+        </section>
+
+        <section id="tabRegistro" class="tab-panel">
+          <div class="form-intro">
+            <div>
+              <p class="eyebrow">Registro optimizado</p>
+              <h3>Nueva evacuación</h3>
+              <p class="muted">Los datos territoriales se completan desde el GPS o desde el punto seleccionado. El supervisor solo registra lo que debe observar en campo.</p>
+            </div>
+          </div>
+
+          <form id="evacForm" novalidate>
+            <div class="form-section">
+              <h4>1. Identificación automática</h4>
+              <div class="form-grid two">
+                <label>Punto crítico
+                  <select id="formPoint" required></select>
+                </label>
+                <label>Supervisor responsable
+                  <select id="formSupervisor" required>
+                    <option value="">Seleccione…</option>
+                    <option>Gabriel García Arteaga</option>
+                    <option>Oldemar Giler Moreira</option>
+                  </select>
+                </label>
+                <label>Parroquia<input id="formParroquia" readonly /></label>
+                <label>Barrio<input id="formBarrio" readonly /></label>
+                <label class="span-two">Sector / referencia<input id="formReferencia" readonly /></label>
+                <label>Coordenadas GPS<input id="formCoords" readonly /></label>
+                <label>Tipo de propiedad<input id="formTipoPropiedad" readonly /></label>
+              </div>
+            </div>
+
+            <div class="form-section">
+              <h4>2. Contexto de la intervención</h4>
+              <div class="form-grid two">
+                <label>Fuente del pedido
+                  <select id="formFuente" required>
+                    <option value="">Seleccione…</option>
+                    <option>Programación habitual</option>
+                    <option>Mantapp</option>
+                    <option>Compromisos en Territorio</option>
+                    <option>Trámites Externos</option>
+                    <option>Otro</option>
+                  </select>
+                </label>
+                <label>Otra fuente<input id="formFuenteOtro" placeholder="Solo si aplica" /></label>
+              </div>
+              <fieldset class="chip-fieldset">
+                <legend>Caracterización del terreno</legend>
+                <label><input type="checkbox" name="terreno" value="Acera / Parterre" /> Acera / Parterre</label>
+                <label><input type="checkbox" name="terreno" value="Quebrada" /> Quebrada</label>
+                <label><input type="checkbox" name="terreno" value="Terreno baldío" /> Terreno baldío</label>
+                <label><input type="checkbox" name="terreno" value="Área pública" /> Área pública</label>
+                <label><input type="checkbox" name="terreno" value="Cauce de río" /> Cauce de río</label>
+              </fieldset>
+            </div>
+
+            <div class="form-section">
+              <h4>3. Inicio y finalización</h4>
+              <div class="time-action-row">
+                <button type="button" id="markStartBtn" class="secondary-btn">Marcar inicio</button>
+                <div><span>Inicio</span><strong id="startDisplay">No registrado</strong></div>
+              </div>
+              <div class="time-action-row">
+                <button type="button" id="markEndBtn" class="secondary-btn">Marcar fin</button>
+                <div><span>Finalización</span><strong id="endDisplay">No registrado</strong></div>
+              </div>
+            </div>
+
+            <div class="form-section">
+              <div class="section-inline-title">
+                <h4>4. Caracterización de residuos</h4>
+                <span id="wasteTotal" class="sum-chip">Total 0%</span>
+              </div>
+              <p class="microcopy">Asigne porcentajes en intervalos de 10. Para guardar, la composición debe sumar 100%.</p>
+              <div id="wasteGrid" class="waste-grid"></div>
+            </div>
+
+            <div class="form-section">
+              <h4>5. Vehículo y equipo</h4>
+              <div class="form-grid two">
+                <label>Tipo de vehículo
+                  <select id="formVehicleType" required>
+                    <option value="">Seleccione…</option><option>Camión</option><option>Volquete</option><option>Camioneta</option><option>Otro</option>
+                  </select>
+                </label>
+                <label>Propiedad del vehículo
+                  <select id="formVehicleOwner" required>
+                    <option value="">Seleccione…</option><option>Municipal</option><option>Contratado</option><option>Municipal de otra Dirección</option><option>Otro</option>
+                  </select>
+                </label>
+                <label>Capacidad volumétrica (m³)<input id="formCapacity" type="number" min="0" step="0.1" inputmode="decimal" /></label>
+                <label>Número de viajes<input id="formTrips" type="number" min="0" step="1" inputmode="numeric" required /></label>
+              </div>
+              <fieldset class="chip-fieldset">
+                <legend>Equipo de carga utilizado</legend>
+                <label><input type="checkbox" name="equipo" value="Carga Manual" /> Carga Manual</label>
+                <label><input type="checkbox" name="equipo" value="Bobcat (Minicargadora)" /> Bobcat</label>
+                <label><input type="checkbox" name="equipo" value="Retroexcavadora (Gallineta)" /> Retroexcavadora</label>
+                <label><input type="checkbox" name="equipo" value="Excavadora Hidráulica" /> Excavadora hidráulica</label>
+                <label><input type="checkbox" name="equipo" value="Cargadora frontal (Payloader)" /> Cargadora frontal</label>
+                <label><input type="checkbox" name="equipo" value="Bulldozer (Tractor de orugas)" /> Bulldozer</label>
+              </fieldset>
+              <label class="standalone-label">Propiedad del equipo de carga
+                <select id="formEquipmentOwner">
+                  <option value="">No aplica / Seleccione…</option><option>Municipal</option><option>Contratado</option><option>Municipal de otra Dirección</option><option>Otro</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="form-section">
+              <h4>6. Evidencia</h4>
+              <div class="photo-grid">
+                <label class="photo-picker"><span>Foto ANTES</span><input id="photoBefore" type="file" accept="image/*" capture="environment" /><img id="previewBefore" alt="Vista previa antes" /></label>
+                <label class="photo-picker"><span>Foto DESPUÉS</span><input id="photoAfter" type="file" accept="image/*" capture="environment" /><img id="previewAfter" alt="Vista previa después" /></label>
+              </div>
+              <label class="standalone-label">Observaciones<textarea id="formObservations" rows="4" placeholder="Novedades, residuos especiales, incidencias, etc."></textarea></label>
+            </div>
+
+            <div id="formError" class="alert error hidden"></div>
+            <button type="submit" class="primary-btn full large">Guardar evacuación</button>
+            <p class="microcopy center">Si no hay internet, el registro y las fotos quedan guardados en el dispositivo hasta su sincronización.</p>
+          </form>
+        </section>
+
+        <section id="tabPendientes" class="tab-panel">
+          <div class="pending-head">
+            <div><p class="eyebrow">Trabajo offline</p><h3>Registros guardados</h3></div>
+            <button id="syncBtn" class="primary-btn compact">Sincronizar</button>
+          </div>
+          <div id="syncNotice" class="alert info"></div>
+          <div id="pendingList" class="pending-list"></div>
+        </section>
+
+        <nav class="bottom-nav" aria-label="Navegación del módulo">
+          <button class="nav-item active" data-tab="Ubicacion"><span>⌖</span><small>Ubicación</small></button>
+          <button class="nav-item" data-tab="Mapa"><span>◇</span><small>Mapa</small></button>
+          <button class="nav-item protected-nav" data-tab="Registro"><span>＋</span><small>Registrar</small><i class="lock-mark" aria-hidden="true">🔒</i></button>
+          <button class="nav-item protected-nav" data-tab="Pendientes"><span>≡</span><small>Pendientes</small><i class="lock-mark" aria-hidden="true">🔒</i><b id="pendingBadge" class="pending-badge hidden">0</b></button>
+        </nav>
+      </section>
+    </main>
+  </div>
+
+  <div id="authModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+    <div class="auth-modal">
+      <div class="auth-lock" aria-hidden="true">🔒</div>
+      <p class="eyebrow">Acceso restringido</p>
+      <h2 id="authTitle">Acceso de supervisor</h2>
+      <p class="muted">La consulta territorial es pública. Para registrar o gestionar evacuaciones, ingrese el PIN de supervisor.</p>
+      <label class="pin-label">PIN
+        <input id="supervisorPin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" placeholder="••••" aria-describedby="authError" />
+      </label>
+      <div id="authError" class="alert error hidden">PIN incorrecto.</div>
+      <div class="auth-actions">
+        <button id="cancelAuthBtn" class="secondary-btn" type="button">Cancelar</button>
+        <button id="confirmAuthBtn" class="primary-btn" type="button">Ingresar</button>
+      </div>
+      <p class="microcopy center">Una autorización válida permanece activa en este dispositivo durante la jornada configurada o hasta cerrar sesión.</p>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
